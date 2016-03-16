@@ -1,3 +1,3 @@
 all:
-	g++ matrixprod.cpp -o matrixprod -l papi
+	g++ matrixprod.cpp -o matrixprod -l papi -Wall
 
