@@ -27,4 +27,8 @@
 *.out
 !*.*
 
+
+log.txt
+assignment/cpp/matrixprod
+
 .idea
