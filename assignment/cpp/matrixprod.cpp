@@ -8,22 +8,49 @@
 #include <fstream>
 #include <sstream>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-
+       
 using namespace std;
 
-#define SYSTEMTIME clock_t
+#define SYSTEMTIME struct timespec
 
 ofstream logFile;
-
+float papi_real_time, papi_proc_time, papi_mflops;
+long long papi_flpins;
 
 // ------------------------------------ PAPI AUXILIAR FUNCTIONS
 
-void papiHandleError (int ret)
+void papiHandleError (std::string msg, int ret)
 {
+  cout << msg << endl;
   printf("PAPI error %d: %s\n", ret, PAPI_strerror(ret));
   exit(1);
 }
+
+
+// ------------------------------------ from: https://icl.cs.utk.edu/projects/papi/wiki/PAPITopics:Getting_Started
+static void test_fail(const char *file, int line,const char *call, int retval){
+    printf("%s\tFAILED\nLine # %d\n", file, line);
+    if ( retval == PAPI_ESYS ) {
+        char buf[128];
+        memset( buf, '\0', sizeof(buf) );
+        sprintf(buf, "System error in %s:", call );
+        perror(buf);
+    }
+    else if ( retval > 0 ) {
+        printf("Error calculating: %s\n", call );
+    }
+    else {
+        printf("Error in %s: %s\n", call, PAPI_strerror(retval) );
+    }
+    printf("\n");
+    exit(1);
+}
+
 
 int papiSubscribeEvents(){
     int ret, eventSet = PAPI_NULL;
@@ -35,7 +62,8 @@ int papiSubscribeEvents(){
         printf("PAPI library version mismatch!\n");
         exit(1);
     }
-    if (ret < 0) papiHandleError(ret);
+    if (ret < 0) papiHandleError("PAPI_library_init", ret);
+
 
     std::cout << "PAPI Version Number: MAJOR: " << PAPI_VERSION_MAJOR(ret)
                 << " MINOR: " << PAPI_VERSION_MINOR(ret)
@@ -47,12 +75,20 @@ int papiSubscribeEvents(){
 
 
     // subscribe events
-    ret = PAPI_add_event(eventSet,PAPI_L1_DCM );
-    if (ret != PAPI_OK) cout << "ERRO: PAPI_L1_DCM" << endl;
+    ret = PAPI_add_event(eventSet,PAPI_L1_DCM);
+    if (ret != PAPI_OK) papiHandleError("PAPI_add_event PAPI_L1_DCM", ret);
+    
 
     ret = PAPI_add_event(eventSet,PAPI_L2_DCM);
-    if (ret != PAPI_OK) cout << "ERRO: PAPI_L2_DCM" << endl;
+    if (ret != PAPI_OK) papiHandleError("PAPI_add_event PAPI_L2_DCM", ret);
     
+    ret = PAPI_flops(&papi_real_time, &papi_proc_time, &papi_flpins, &papi_mflops);
+    if (ret != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_flops", ret);
+    
+    ret = PAPI_start_counters();
+    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
+    
+  
     return eventSet;
 }
 
@@ -65,9 +101,6 @@ void papiUnsubscribeEvents(int eventSet){
     ret = PAPI_remove_event( eventSet, PAPI_L2_DCM );
     if ( ret != PAPI_OK ) cout << "FAIL remove event" << endl; 
 
-    // release eventset
-    ret = PAPI_destroy_eventset( &eventSet );
-    if ( ret != PAPI_OK ) cout << "FAIL destroy" << endl;
 }
 
 
@@ -76,33 +109,30 @@ void papiStartCounter(int eventSet){
     // Start counting
     ret = PAPI_start(eventSet);
     if (ret != PAPI_OK) cout << "ERRO: Start PAPI" << endl;
+    
+    ret = PAPI_start_counters();
+    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
 }
 
-void papiShowResults(int eventSet, bool showResults){
+void papiResetCounter(int eventSet){
     int ret;
-    long long values[2];
     
-    // show papi results
-    ret = PAPI_stop(eventSet, values);
-    if (ret != PAPI_OK) cout << "ERRO: Stop PAPI" << endl;
-    
-    if(showResults){
-        cout << "PAPI results:" << endl;
-        printf("L1 DCM: %lld \n",values[0]);
-        printf("L2 DCM: %lld \n",values[1]);
-        
-        if(logFile.is_open()){
-            logFile << values[0] << ";" << values[1] << ";\n";
-        }
-    }
-    
-    
-
     // reset counters
     ret = PAPI_reset( eventSet );
     if ( ret != PAPI_OK ) cout << "FAIL reset" << endl; 
     
+    ret = PAPI_stop_counters();
+    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
 }
+
+
+void papiShowResults(int eventSet, bool showResults){
+
+
+    
+}
+
+
 
 
 // ------------------------------------ INIT, PRINT & FREE MATRICES; PRINT HEADERS & RESULTS; MAIN LOOP;
@@ -161,23 +191,57 @@ void printLogFileHeaders(){
     }
 }
 
-void printResults(SYSTEMTIME time1, int op, int m_ar, int m_br){
-	char st[100];
-        double delta = (double)(clock() - time1) / CLOCKS_PER_SEC, performance;
+void printResults(SYSTEMTIME time1, int op, int m_ar, int m_br, int eventSet){
+    
+        int ret;
+        long long values[2];
+        SYSTEMTIME time2;
+        
+        if(clock_gettime(CLOCK_MONOTONIC,&time2) < 0){
+            perror("Failure getting process time (2)");
+            exit(EXIT_FAILURE);
+        }
+        
+        
+        // retreive papi results
+        //ret = PAPI_flops(&papi_real_time, &papi_proc_time, &papi_flpins, &papi_mflops);
+        //if (ret != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_flops", ret);
+        
+        ret = PAPI_stop(eventSet, values);
+        if (ret != PAPI_OK) cout << "ERRO: Stop PAPI" << endl;
+        
+        
+        
+        
+        double delta = (double)(time2.tv_sec - time1.tv_sec) + ((double)(time2.tv_nsec - time1.tv_nsec) / 1000000000.0);
+        long long calcNrInsOp = ((long long)3*m_ar*m_br*m_br);
+        double performance = (calcNrInsOp/delta)/1000000.0;
 
+        cout << "PAPI results:" << endl;
+        printf("L1 DCM: %lld \n",values[0]);
+        printf("L2 DCM: %lld \n",values[1]);
+        printf("Real_time:\t%f\nProc_time:\t%f\nTotal flpins:\t%lld\nMFLOPS:\t\t%f\n", papi_real_time, papi_proc_time, papi_flpins, papi_mflops);
+          
+          
+        //printf("FP OPS: %lld \n",values[2]);
+        //printf("FP INS: %lld \n",values[3]);
+        //printf("OP+INS: %lld \n", (values[3]+values[2]));
+        //printf("C. O+I: %lld \n", calcNrInsOp);
+
+	//printf("Time  : %3.3f seconds\n", delta);                
+        //printf("Perfor: %3.3f MFLOPS\n", performance);
+        //printf("T.erfor: %3.3f MFLOPS\n", performance);
+	
+        
         if(logFile.is_open()){ 
+            logFile << values[0] << ";";
+            logFile << values[1] << ";";
             logFile << op << ";";
             logFile << m_ar << ";";
             logFile << m_br << ";";
+            logFile << delta << ";";
+            logFile << performance << ";\n";
         }
-	sprintf(st, "Time: %3.3f seconds\n", delta);
-	cout << st;
-        if(logFile.is_open()) logFile << delta << ";";
-        
-        performance = (((double)3*m_ar*m_br*m_br)*1000000)/delta;
-        sprintf(st, "Prf.: %3.3f MFLOPS\n", performance);
-	cout << st;
-        if(logFile.is_open()) logFile << performance << ";";
 }
 
 
@@ -190,17 +254,25 @@ void freeMatrices(double * pha, double * phb, double * phc){
 
 void multMatrices(double * pha, double * phb, double * phc, int m_ar, int m_br);
 void multMatricesLineByLine(double * pha, double * phb, double * phc, int m_ar, int m_br);
-void multMatricesParallel(double * pha, double * phb, double * phc, int m_ar, int m_br);
+void multMatricesParallel(double * pha, double * phb, double * phc, int m_ar, int m_br, int nthreads);
+void multMatricesParallelLineByLine(double * pha, double * phb, double * phc, int m_ar, int m_br, int nthreads);
 
-void multiplyMatrices(int m_ar, int m_br, int op) 
+
+void multiplyMatrices(int eventSet, int m_ar, int m_br, int op, int nthreads) 
 {
 	double *pha, *phb, *phc;
 	SYSTEMTIME time1;
 
 	initMatrices(&pha,&phb,&phc, m_ar,m_br);
 	
-            
-        time1 = clock();
+        
+        if(clock_gettime(CLOCK_MONOTONIC,& time1) < 0){
+            perror("Failure getting process time (1)");
+            exit(EXIT_FAILURE);
+        }
+        papiResetCounter(eventSet);
+
+        
         switch(op){
             case 1:
                 multMatrices(pha,phb,phc,m_ar,m_br);
@@ -209,18 +281,20 @@ void multiplyMatrices(int m_ar, int m_br, int op)
                 multMatricesLineByLine(pha,phb,phc,m_ar,m_br);
                 break;
             case 3: 
-                multMatricesParallel(pha,phb,phc,m_ar,m_br);
+                multMatricesParallel(pha,phb,phc,m_ar,m_br,nthreads);
                 break;
+            case 4: 
+                multMatricesParallelLineByLine(pha,phb,phc,m_ar,m_br,nthreads);
+                break;
+            
         }
-        printResults(time1,op, m_ar,m_br);
+        printResults(time1,op, m_ar,m_br, eventSet);
 	printResultMatrix(&phc,m_br);
 	
         freeMatrices(pha,phb,phc);
 }
 
-bool showMenu(){ 
-    int op, lin, col;
-    
+bool showMenu(int & lin, int & col, int & op, int & nthreads){ 
     
     // menu dialog
     cout << endl;
@@ -229,12 +303,13 @@ bool showMenu(){
     cout << "1. Multiplication" << endl;
     cout << "2. Line Multiplication" << endl;
     cout << "3. Parallel Multiplication" << endl;
+    cout << "4. Line Parallel Multiplication" << endl;
     cout << "0. End" << endl << endl;
     cout << "Selection?: ";
     cin >> op;
     
     // preliminar option validation
-    if( op < 0 || op > 3) {
+    if( op < 0 || op > 4) {
         cout << "Bad option. " << endl;
         return true;
     } else if (op == 0){ // exit program
@@ -244,84 +319,22 @@ bool showMenu(){
     // secondary question
     printf("Dimensions: lins cols ? ");
     cin >> lin >> col;
+     
+    
+    // parallel question
+    if(op == 3 || op == 4){
+        printf("Number of threads ? ");
+        cin >> nthreads;
+        cout << endl;
+    }
+    
     cout << endl;
-    
-    
+
     // preforming operations
-    cout << "Working ..." << endl;
-    multiplyMatrices(lin,col,op);
+    cout << "Calculating ..." << endl;
     
     return true;
 }
-
-// ------------------------------------ MAIN MATRIX MULTIPLICATION ALGORITHMS
-
-
-/*
-*
-*       OLD CODE VERSIONS: Single with col/rows reversed; Line by Line true transpose matrix; 
-* 
-* 
-*
-
-void transpose(double * matrix,int nRows,int nColumns, double * transpose){
-    
-    int i, j;
-    for(i = 0; i < nRows; i++){
-        for(j = 0; j < nColumns; j++){
-            transpose[j*nRows+i] = matrix[i*nColumns+j];
-        }
-    }
-    
-}
-
-void multMatricesLineByLineByTranspose(double * pha, double * phb, double * phc, int m_ar, int m_br)
-{
-        double temp;
-        int i, j, k;
-        
-        double * phbT = (double *)malloc((m_ar * m_br) * sizeof(double));
-        transpose(phb, m_br, m_ar, phbT);
-    
-        for(i=0; i<m_ar; i++) 
-	{	
-                for( j=0; j<m_ar; j++) 
-		{	 
-                        
-			 for( k=0; k<m_br; k++)
-			{	
-                                temp = 0;
-                                for( k=0; k<m_br; k++)
-                                {	
-                                        temp += pha[i*m_ar+k] * phbT[i*m_ar+k]; 
-                                }
-                                phc[i*m_ar+j]=temp; 
-			}
-			
-		}
-	}
-	
-	free(phbT);
-}
-
-
-void multMatricesOpt(double * pha, double * phb, double * phc, int m_ar, int m_br){
-	double temp;
-	int i, j, k;
-
-	for( j=0; j<m_ar; j++)
-	{	
-                for(i=0; i<m_ar; i++)
-		{	temp = 0;
-			for( k=0; k<m_br; k++)
-			{	
-				temp += pha[i*m_ar+k] * phb[k*m_br+j];
-			}
-			phc[i*m_ar+j]=temp;
-		}
-	}
-}
-*/
 
 void multMatrices(double * pha, double * phb, double * phc, int m_ar, int m_br)
 {
@@ -363,37 +376,74 @@ void multMatricesLineByLine(double * pha, double * phb, double * phc, int m_ar, 
 
 }
 
-void multMatricesParallel(double * pha, double * phb, double * phc, int m_ar, int m_br)
+void multMatricesParallel(double * pha, double * phb, double * phc, int m_ar, int m_br, int nthreads)
 {
+        double temp;
+	int i, j, k;        
     
+        #pragma omp parallel for num_threads(nthreads) private(k) private(j) private(temp)
+	for(i=0; i<m_ar; i++) 
+	{	
+                for( j=0; j<m_ar; j++)
+		{	temp = 0;
+			for( k=0; k<m_br; k++)
+			{	
+				temp += pha[i*m_ar+k] * phb[k*m_br+j];
+			}
+			phc[i*m_ar+j]=temp;
+		}
+	}
 }
+
+void multMatricesParallelLineByLine(double * pha, double * phb, double * phc, int m_ar, int m_br, int nthreads)
+{
+        int i, j, k;
+        
+        #pragma omp parallel for num_threads(nthreads) private(k) private(j)
+        for(i=0; i<m_ar; i++) 
+	{	
+                for( k=0; k<m_br; k++) 
+		{	 
+                        for( j=0; j<m_ar; j++) 
+			{	
+				phc[i*m_ar+j] += (pha[i*m_ar+k] * phb[k*m_br+j]);
+                                
+			}
+			
+		}
+	}
+	
+
+}
+
+
 
 
 int main (int argc, char *argv[])
 {        
         bool cntinue = false;
         int eventSet = papiSubscribeEvents();
+        int lin,col,op,nthreads;
         
     
         //create log file
-        if(argc > 1 && strcmp(argv[1],"app") == 0){
+        if(argc > 1 && strcmp(argv[1],"-a") == 0){
              logFile.open("log.txt", ios::app | ios::ate);
         }
         else {
-            cout << endl << "Next time, you may use: «matrixprod app» to append results on the log file." << endl;
+            cout << endl << "Next time, you may want to use: «matrixprod -a» to append results on the log file." << endl;
             logFile.open("log.txt");
             printLogFileHeaders();
         }
         
-        
-        
         do{
-            papiStartCounter(eventSet);
-            cntinue = showMenu();
-            papiShowResults(eventSet,cntinue);
+            cntinue = showMenu(lin,col,op,nthreads);
+            if(cntinue) multiplyMatrices(eventSet,lin,col,op,nthreads);
+            papiResetCounter(eventSet);
 	}while (cntinue);
         papiUnsubscribeEvents(eventSet); 
         
+        cout << endl << "Bye!" << endl;
         logFile.close();
 }
 

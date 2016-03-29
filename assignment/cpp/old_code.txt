@@ -1,0 +1,69 @@
+
+// ------------------------------------ MAIN MATRIX MULTIPLICATION ALGORITHMS
+
+
+/*
+*
+*       OLD CODE VERSIONS: Single with col/rows reversed; Line by Line true transpose matrix; 
+* 
+* 
+*
+
+void transpose(double * matrix,int nRows,int nColumns, double * transpose){
+    
+    int i, j;
+    for(i = 0; i < nRows; i++){
+        for(j = 0; j < nColumns; j++){
+            transpose[j*nRows+i] = matrix[i*nColumns+j];
+        }
+    }
+    
+}
+
+void multMatricesLineByLineByTranspose(double * pha, double * phb, double * phc, int m_ar, int m_br)
+{
+        double temp;
+        int i, j, k;
+        
+        double * phbT = (double *)malloc((m_ar * m_br) * sizeof(double));
+        transpose(phb, m_br, m_ar, phbT);
+    
+        for(i=0; i<m_ar; i++) 
+	{	
+                for( j=0; j<m_ar; j++) 
+		{	 
+                        
+			 for( k=0; k<m_br; k++)
+			{	
+                                temp = 0;
+                                for( k=0; k<m_br; k++)
+                                {	
+                                        temp += pha[i*m_ar+k] * phbT[i*m_ar+k]; 
+                                }
+                                phc[i*m_ar+j]=temp; 
+			}
+			
+		}
+	}
+	
+	free(phbT);
+}
+
+
+void multMatricesOpt(double * pha, double * phb, double * phc, int m_ar, int m_br){
+	double temp;
+	int i, j, k;
+
+	for( j=0; j<m_ar; j++)
+	{	
+                for(i=0; i<m_ar; i++)
+		{	temp = 0;
+			for( k=0; k<m_br; k++)
+			{	
+				temp += pha[i*m_ar+k] * phb[k*m_br+j];
+			}
+			phc[i*m_ar+j]=temp;
+		}
+	}
+}
+*/ 
