@@ -33,7 +33,7 @@ void papiHandleError (std::string msg, int ret)
 
 
 // ------------------------------------ from: https://icl.cs.utk.edu/projects/papi/wiki/PAPITopics:Getting_Started
-static void test_fail(const char *file, int line,const char *call, int retval){
+/*static void test_fail(const char *file, int line,const char *call, int retval){
     printf("%s\tFAILED\nLine # %d\n", file, line);
     if ( retval == PAPI_ESYS ) {
         char buf[128];
@@ -49,7 +49,7 @@ static void test_fail(const char *file, int line,const char *call, int retval){
     }
     printf("\n");
     exit(1);
-}
+}*/
 
 
 int papiSubscribeEvents(){
@@ -82,11 +82,19 @@ int papiSubscribeEvents(){
     ret = PAPI_add_event(eventSet,PAPI_L2_DCM);
     if (ret != PAPI_OK) papiHandleError("PAPI_add_event PAPI_L2_DCM", ret);
     
-    ret = PAPI_flops(&papi_real_time, &papi_proc_time, &papi_flpins, &papi_mflops);
-    if (ret != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_flops", ret);
+    ret = PAPI_add_event(eventSet,PAPI_FP_OPS);
+    //if (ret != PAPI_OK) papiHandleError("PAPI_add_event PAPI_FP_OPS", ret);
     
-    ret = PAPI_start_counters();
-    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
+    if (PAPI_query_event(PAPI_FP_OPS) != PAPI_OK) {
+    fprintf(stderr,"No instruction counter? How lame.\n");
+    exit(1);
+    }
+    
+    //ret = PAPI_flops(&papi_real_time, &papi_proc_time, &papi_flpins, &papi_mflops);
+    //if (ret != PAPI_OK) test_fail(__FILE__, __LINE__, "PAPI_flops", ret);
+    
+    //ret = PAPI_start_counters();
+    //if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
     
   
     return eventSet;
@@ -101,6 +109,8 @@ void papiUnsubscribeEvents(int eventSet){
     ret = PAPI_remove_event( eventSet, PAPI_L2_DCM );
     if ( ret != PAPI_OK ) cout << "FAIL remove event" << endl; 
 
+        ret = PAPI_remove_event( eventSet, PAPI_FP_OPS );
+    if ( ret != PAPI_OK ) cout << "FAIL remove event" << endl; 
 }
 
 
@@ -110,8 +120,6 @@ void papiStartCounter(int eventSet){
     ret = PAPI_start(eventSet);
     if (ret != PAPI_OK) cout << "ERRO: Start PAPI" << endl;
     
-    ret = PAPI_start_counters();
-    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
 }
 
 void papiResetCounter(int eventSet){
@@ -121,17 +129,7 @@ void papiResetCounter(int eventSet){
     ret = PAPI_reset( eventSet );
     if ( ret != PAPI_OK ) cout << "FAIL reset" << endl; 
     
-    ret = PAPI_stop_counters();
-    if (ret != PAPI_OK) papiHandleError("PAPI_start_counters", ret);
 }
-
-
-void papiShowResults(int eventSet, bool showResults){
-
-
-    
-}
-
 
 
 
@@ -182,19 +180,22 @@ void printLogFileHeaders(){
         logFile << "Function ID" << ";";
         logFile << "Rows" << ";";
         logFile << "Cols" << ";";
+        logFile << "Number of threads" << ";"; 
         logFile << "Duration (seconds)" << ";";
         logFile << "Performance (MFLOPS)" << ";";
+        logFile << "Theoretical performance (MFLOPS)" << ";";
         logFile << "L1 DCM" << ";";
         logFile << "L1 DCM" << ";";
+        logFile << "FP OPS" << ";";
         logFile << "\n";
 
     }
 }
 
-void printResults(SYSTEMTIME time1, int op, int m_ar, int m_br, int eventSet){
+void printResults(SYSTEMTIME time1, int op, int m_ar, int m_br, int nthreads, int eventSet){
     
         int ret;
-        long long values[2];
+        long long values[3];
         SYSTEMTIME time2;
         
         if(clock_gettime(CLOCK_MONOTONIC,&time2) < 0){
@@ -214,33 +215,45 @@ void printResults(SYSTEMTIME time1, int op, int m_ar, int m_br, int eventSet){
         
         
         double delta = (double)(time2.tv_sec - time1.tv_sec) + ((double)(time2.tv_nsec - time1.tv_nsec) / 1000000000.0);
+        
         long long calcNrInsOp = ((long long)3*m_ar*m_br*m_br);
-        double performance = (calcNrInsOp/delta)/1000000.0;
+        double tPerformance = calcNrInsOp/(double)(delta*1000000.0);
+        
+        double performance = values[2]/(double)(delta*1000000.0);
 
         cout << "PAPI results:" << endl;
         printf("L1 DCM: %lld \n",values[0]);
         printf("L2 DCM: %lld \n",values[1]);
-        printf("Real_time:\t%f\nProc_time:\t%f\nTotal flpins:\t%lld\nMFLOPS:\t\t%f\n", papi_real_time, papi_proc_time, papi_flpins, papi_mflops);
+        
+        //printf("Real_time:\t%f\nProc_time:\t%f\nTotal flpins:\t%lld\nMFLOPS:\t\t%f\n", papi_real_time, papi_proc_time, papi_flpins, papi_mflops);
           
-          
-        //printf("FP OPS: %lld \n",values[2]);
+        printf("FP OPS: %lld \n",values[2]);
+        printf("T OPS: %lld \n", calcNrInsOp);
+
         //printf("FP INS: %lld \n",values[3]);
         //printf("OP+INS: %lld \n", (values[3]+values[2]));
-        //printf("C. O+I: %lld \n", calcNrInsOp);
 
-	//printf("Time  : %3.3f seconds\n", delta);                
-        //printf("Perfor: %3.3f MFLOPS\n", performance);
-        //printf("T.erfor: %3.3f MFLOPS\n", performance);
+	printf("Time  : %3.3f seconds\n", delta);                
+        printf("Perfor: %3.3f MFLOPS\n", performance);
+        printf("T.Prfr: %3.3f MFLOPS\n", tPerformance);
 	
         
+        
+        
         if(logFile.is_open()){ 
-            logFile << values[0] << ";";
-            logFile << values[1] << ";";
+
             logFile << op << ";";
             logFile << m_ar << ";";
             logFile << m_br << ";";
+            logFile << nthreads << ";";
             logFile << delta << ";";
             logFile << performance << ";\n";
+            logFile << tPerformance << ";\n";
+            logFile << values[0] << ";";
+            logFile << values[1] << ";";
+            logFile << values[2] << ";";
+
+            
         }
 }
 
@@ -270,7 +283,7 @@ void multiplyMatrices(int eventSet, int m_ar, int m_br, int op, int nthreads)
             perror("Failure getting process time (1)");
             exit(EXIT_FAILURE);
         }
-        papiResetCounter(eventSet);
+        papiStartCounter(eventSet);
 
         
         switch(op){
@@ -288,7 +301,7 @@ void multiplyMatrices(int eventSet, int m_ar, int m_br, int op, int nthreads)
                 break;
             
         }
-        printResults(time1,op, m_ar,m_br, eventSet);
+        printResults(time1,op, m_ar,m_br,nthreads,  eventSet);
 	printResultMatrix(&phc,m_br);
 	
         freeMatrices(pha,phb,phc);
@@ -320,7 +333,7 @@ bool showMenu(int & lin, int & col, int & op, int & nthreads){
     printf("Dimensions: lins cols ? ");
     cin >> lin >> col;
      
-    
+    nthreads = 1;
     // parallel question
     if(op == 3 || op == 4){
         printf("Number of threads ? ");
