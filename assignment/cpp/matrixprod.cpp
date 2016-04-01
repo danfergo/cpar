@@ -161,7 +161,8 @@ void initMatrices(double ** pha, double ** phb, double ** phc, int m_ar, int m_b
                         (*phc)[i*m_ar + j] = 0;
                 }
 
-}
+}                //4000x4000 to 10000x10000 incremented by 2000
+
 
 void printResultMatrix(double ** phc, int m_br) {
         int i,j;
@@ -450,19 +451,29 @@ void automaticTests(int eventSet, int test_number){
                 printLogFileHeaders();
                 cout << "================" << endl << "Automatic test 2" << endl << "================" << endl << endl;
                 //600x600 -> 3000x3000 incremented by 400
-                mult(600, 3000, 400, 1, eventSet, 1);
+                //mult(600, 3000, 400, 1, eventSet, 1);
                 mult(600, 3000, 400, 2, eventSet, 1);
                 break;
+        case 25:
+                logFile.open("log_auto2-5.txt");
+                printLogFileHeaders();
+                cout << "================" << endl << "Automatic test 2.5" << endl << "================" << endl << endl;
+                //4000x4000 to 10000x10000 incremented by 2000
+                for(int i = 0; i < 4; i++) {
+                        mult(4000, 10000, 2000, 2, eventSet, 1);
+                }
         case 3:
                 logFile.open("log_auto3.txt");
                 printLogFileHeaders();
                 cout << "================" << endl << "Automatic test 3" << endl << "================" << endl << endl;
-                //4000x4000 to 10000x10000 incremented by 2000
                 for(int i = 0; i < 4; i++) {
-                        mult(4000, 10000, 2000, 3, eventSet, i + 1);
+                        mult(600, 3000, 400, 3, eventSet, i + 1);
                 }
+        case 4:
+                logFile.open("log_auto4.txt");
+                cout << "================" << endl << "Automatic test 4 " << endl << "================" << endl << endl;
                 for(int i = 0; i < 4; i++) {
-                        mult(4000, 10000, 2000, 4, eventSet, i + 1);
+                        mult(600, 3000, 400, 4, eventSet, i + 1);
                 }
                 break;
         default:
