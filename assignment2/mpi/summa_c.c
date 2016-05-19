@@ -272,7 +272,7 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
         }
 
         // broadcast A_loc from root_col within row_comm
-        MPI_Bcast(A_loc, mb*nb, MPI_FLOAT, root_col, &row_comm);
+        MPI_Bcast(A_loc, mb*nb, MPI_FLOAT, root_col, row_comm);
 
         // owner of B_loc[:,root_row] will broadcast its block within col comm
         if (my_row == root_row) {
@@ -281,7 +281,7 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
         }
 
         // broadcast B_loc from root_row within col_comm
-        MPI_Bcast(B_loc, nb*kb, MPI_FLOAT, root_row, &col_comm);
+        MPI_Bcast(B_loc, nb*kb, MPI_FLOAT, root_row, col_comm);
 
         // multiply local blocks A_loc, B_loc using matmul_naive
         // and store in C_loc_tmp
@@ -441,6 +441,8 @@ int main(int argc, char *argv[]) {
     // SUMMA execution take overall we should find time of the slowest processor.
     // We should be using MPI_Reduce function with MPI_MAX operation
     double etime = tend - tstart;
+
+    printf("SUMMA took %f sec on process %i\n", etime, myrank);
     double max_etime = 0.0;
 
 
@@ -450,6 +452,7 @@ int main(int argc, char *argv[]) {
     // Use MPI_Reduce function and MPI_MAX operation.
     // MPI_Reduce(... YOUR CODE HERE ...);
     // ====================================================
+    MPI_Reduce(&etime, &max_etime, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (myrank == 0) {
         printf("SUMMA took %f sec\n", max_etime);
     }
