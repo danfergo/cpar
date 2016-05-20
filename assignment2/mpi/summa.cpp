@@ -105,6 +105,8 @@ void gatherMatrix(int mb, int nb, double *A_loc, int m_a, int n_a, double *A_glo
 
         }
     }
+
+    free(A_tmp);
 }
 
 void printMatrix(const int rows, const int cols, const double *matr) {
@@ -115,7 +117,58 @@ void printMatrix(const int rows, const int cols, const double *matr) {
         }
         printf("\n");
     }
+}
 
+void distributeSquareMatrix(double * matrix, int size, double * local_matrix) {
+    int number_blocks = size / number_of_processes;
+    int block_size = size / number_blocks;
+
+    double * temp_matrix = NULL;
+
+    int pos = 0;
+
+    if(rank == 0){
+        temp_matrix = (double * ) malloc(size * size * sizeof(double));
+
+        for (int block_i = 0; block_i < number_blocks; block_i++) {
+            for (int block_j = 0; block_j < number_blocks; block_j++) {
+                int block_row = block_i * block_size;
+                int block_col = block_j * block_size;
+                for(int local_i = 0; local_i < block_size; local_i++){
+                    for(int local_j = 0; local_j < block_size; local_j++){
+                        temp_matrix[pos] = matrix[(block_row + local_i)*n + (block_col + local_j)];
+                        pos++;
+                    }
+                }
+            }
+        }
+    }
+    std::cout << "ORIGINAL" << std::endl;
+    printMatrix(size, size, matrix);
+
+    std::cout << "TEMP" << std::endl;
+    printMatrix(size, size, temp_matrix);
+
+    //MPI_Scatter(temp_matrix, size * size, MPI_DOUBLE, local_matrix, block_size * block_size, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+
+
+/*
+    double * local_matrix = (double * ) malloc(block_size * block_size * sizeof(double));
+
+
+    //
+    for (int block_i = 0; block_i < number_blocks; block_i++) {
+        for (int block_j = 0; block_j < number_blocks; block_j++) {
+
+            for(int local_i = 0; local_i < block_size; local_i++){
+                for(int local_j = 0; local_j < block_size; local_j++){
+
+                }
+            }
+        }
+    }
+*/
 }
 
 double validate(const int m, const int n, const double *Csumma, double *Cnaive) {
@@ -268,6 +321,20 @@ int compute(){
 
     initMatrices(A_local, B_local, C_local, m_block, n_block, comm_cart);
 
+
+    /**
+    testing the scatter function
+    */
+    if(rank == 0){
+        double * A_1 = (double *) calloc(n * k, sizeof(double));
+        double * B_1 = (double *) calloc(n * k, sizeof(double));
+        double * C_1 = (double *) calloc(n * k, sizeof(double));
+
+        initMatrices(A_1, B_1, C_1, n, n, comm_cart);
+
+        distributeSquareMatrix(A_1, n, C_1);
+    }
+
     gatherMatrix(m_block, n_block, A_local, m, n, A);
     gatherMatrix(n_block, k_block, B_local, n, k, B);
     /*if (rank == 3) {
@@ -315,20 +382,20 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     //std::cout << "Rank: " << rank << std::endl;
 
-    for(int i = 0; i < 5; i++){
+    /*for(int i = 0; i < 5; i++){
         int j = 1000;
         if(number_of_processes == 9){
             j = 999;
         }
-        m = n = k = j * (i + 1);
-        //m = n = k = 4;
+        m = n = k = j * (i + 1);*/
+        m = n = k = 9;
 
         if(rank == 0) {
             std::cout << "======================" << std::endl;
             std::cout << "n: " << n << ", m: " << m << ", k: " << k << std::endl;
         }
         compute();
-    }
+    //}
 
     MPI_Finalize();
 }
