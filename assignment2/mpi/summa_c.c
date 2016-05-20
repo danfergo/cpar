@@ -42,6 +42,36 @@ void waitFor (unsigned int secs) {
     while (time(0) < retTime);               // Loop until it arrives.
 }
 
+void initMatrices(double * pha, double * phb, double * phc, int m_ar, int m_br, MPI_Comm comm_cart){
+    int coords[2];
+    MPI_Cart_coords(comm_cart, myrank, 2, coords);
+
+    int Nj = coords[0];
+    int Ni = coords[1];
+
+    long int i,j, ii, jj;
+
+    for(i=0; i< m_ar; i++){
+        for(j=0; j< m_br; j++) {
+            pha[i*m_br + j] = (Ni*m_ar + i) == (Nj*m_ar + j) ? 1.0 : 0.0;
+            //pha[i*m_br + j] = (double)1.0;
+        }
+    }
+
+    for(i=0; i< m_br; i++){
+        for(j=0; j< m_ar; j++) {
+            phb[i*m_ar + j] = (Ni*m_ar + i) == (Nj*m_ar + j) ? 1.0 : 0.0;
+            //phb[i*m_ar + j] = (double)(i+1);
+        }
+    }
+
+    for(i=0; i< m_ar; i++){
+        for(j=0; j< m_ar; j++) {
+            phc[i*m_ar + j] = 0;
+        }
+    }
+}
+
 void init_matrix(double *matr, const int rows, const int cols) {
     // in real life each proc calculates its portion
     // from some equations, e.g. from PDE
@@ -195,10 +225,10 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
     remain_dims[1] = 0;
     MPI_Cart_sub(comm_cart, remain_dims, &col_comm);
 
-    int row_rank, col_rank;
+    /*int row_rank, col_rank;
     MPI_Comm_rank(row_comm, &row_rank);
     MPI_Comm_rank(col_comm, &col_rank);
-    printf("Rank: %i-->(%i,%i)|(%i,%i)\n", myrank, my_col, my_row, col_rank, row_rank);
+    printf("Rank: %i-->(%i,%i)|(%i,%i)\n", myrank, my_col, my_row, col_rank, row_rank);*/
 
     double *A_loc_save = (double *) calloc(mb*nb, sizeof(double));
     double *B_loc_save = (double *) calloc(nb*kb, sizeof(double));
@@ -272,7 +302,7 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
         }
 
         // broadcast A_loc from root_col within row_comm
-        MPI_Bcast(A_loc, mb*nb, MPI_FLOAT, root_col, row_comm);
+        MPI_Bcast(A_loc, mb*nb, MPI_DOUBLE, root_col, row_comm);
 
         // owner of B_loc[:,root_row] will broadcast its block within col comm
         if (my_row == root_row) {
@@ -281,7 +311,7 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
         }
 
         // broadcast B_loc from root_row within col_comm
-        MPI_Bcast(B_loc, nb*kb, MPI_FLOAT, root_row, col_comm);
+        MPI_Bcast(B_loc, nb*kb, MPI_DOUBLE, root_row, col_comm);
 
         // multiply local blocks A_loc, B_loc using matmul_naive
         // and store in C_loc_tmp
@@ -289,6 +319,12 @@ void SUMMA(MPI_Comm comm_cart, const int mb, const int nb, const int kb, double 
 
         // C_loc = C_loc + C_loc_tmp using plus_matrix
         plus_matrix(mb, nb, C_loc, C_loc_tmp, C_loc);
+
+        if(myrank == 1){
+            print_matrix(mb,mb, A_loc);
+            print_matrix(mb,mb, B_loc);
+            print_matrix(mb,mb, C_loc);
+        }
     }
 
     free(A_loc_save);
@@ -417,8 +453,10 @@ int main(int argc, char *argv[]) {
     // init matrices: fill A_loc and B_loc with random values
     // in real life A_loc and B_loc are calculated by each proc
     // from e.g. partial differential equations
-    init_matrix(A_loc, mb, nb);
-    init_matrix(B_loc, nb, kb);
+    //init_matrix(A_loc, mb, nb);
+    //init_matrix(B_loc, nb, kb);
+
+    initMatrices(A_loc, B_loc, C_loc, mb, nb, comm_cart);
 
     // gather A_glob, B_glob for further checking
 #ifdef CHECK_NUMERICS
