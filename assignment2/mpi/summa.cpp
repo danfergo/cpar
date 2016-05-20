@@ -23,10 +23,12 @@ void initMatrices(double pha[], double phb[], double phc[], int m_ar, int m_br, 
 
     long int i,j;
 
+    double f = 1.0;
     for(i=0; i< m_ar; i++){
         for(j=0; j< m_br; j++) {
-            pha[i*m_br + j] = (Ni*m_ar + i) == (Nj*m_ar + j) ? 1.0 : 0.0;
-            //pha[i*m_br + j] = (double)1.0;
+            //pha[i*m_br + j] = (Ni*m_ar + i) == (Nj*m_ar + j) ? 1.0 : 0.0;
+            pha[i*m_br + j] = f;
+            f++;
         }
     }
 
@@ -125,18 +127,18 @@ void distributeSquareMatrix(double * matrix, int size, double * local_matrix) {
 
     double * temp_matrix = NULL;
 
-    int pos = 0;
-
     if(rank == 0){
         temp_matrix = (double * ) malloc(size * size * sizeof(double));
 
+
+        int i = 0,j = 0;
         for (int block_i = 0; block_i < number_blocks; block_i++) {
             for (int block_j = 0; block_j < number_blocks; block_j++) {
                 int block_row = block_i * block_size;
                 int block_col = block_j * block_size;
                 for(int local_i = 0; local_i < block_size; local_i++){
                     for(int local_j = 0; local_j < block_size; local_j++){
-                        temp_matrix[pos] = matrix[(block_row + local_i)*n + (block_col + local_j)];
+                        temp_matrix[pos] = matrix[(block_row + local_i) * size + (block_col + local_j)];
                         pos++;
                     }
                 }
