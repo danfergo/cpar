@@ -49,7 +49,7 @@ void initMatrices(double * pha, double * phb, double * phc, int m_ar, int m_br, 
     int Nj = coords[0];
     int Ni = coords[1];
 
-    long int i,j, ii, jj;
+    long int i,j;
 
     for(i=0; i< m_ar; i++){
         for(j=0; j< m_br; j++) {

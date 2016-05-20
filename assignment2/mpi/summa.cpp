@@ -45,7 +45,7 @@ void initMatrices(double pha[], double phb[], double phc[], int m_ar, int m_br, 
         }
     }
 }
-void multMatricesLineByLine(double * pha, double * phb, double * phc, int m_ar, int m_br){
+void multMatricesLineByLine(int m_ar, int m_br, const int kk, double * pha, double * phb, double * phc){
 
     for(int i=0; i<m_ar; i++){
         for(int k=0; k<m_br; k++){
@@ -55,7 +55,7 @@ void multMatricesLineByLine(double * pha, double * phb, double * phc, int m_ar, 
         }
     }
 }
-
+/*
 void multiplyMatrixNaive(const int m, const int n, const int k,const double *A, const double *B, double *C) {
 
     for (int j = 0; j < m; ++j) {
@@ -67,7 +67,7 @@ void multiplyMatrixNaive(const int m, const int n, const int k,const double *A, 
         }
     }
 }
-
+*/
 void sumMatrix(const int m, const int n, double *A, double *B, double *C) {
     for (int i = 0; i < m; ++i) {
         for (int j = 0; j < n; ++j) {
@@ -138,8 +138,8 @@ void distributeSquareMatrix(double * matrix, int size, double * local_matrix) {
                 int block_col = block_j * block_size;
                 for(int local_i = 0; local_i < block_size; local_i++){
                     for(int local_j = 0; local_j < block_size; local_j++){
-                        temp_matrix[pos] = matrix[(block_row + local_i) * size + (block_col + local_j)];
-                        pos++;
+                        //temp_matrix[pos] = matrix[(block_row + local_i) * size + (block_col + local_j)];
+                        //pos++;
                     }
                 }
             }
@@ -273,7 +273,7 @@ void summa(MPI_Comm comm_cart, const int m_block, const int n_block, const int k
 
         MPI_Bcast(B_local, n_block * k_block, MPI_DOUBLE, broadcaster, col_comm);
 
-        multiplyMatrixNaive(m_block, n_block, k_block, A_local, B_local, C_tmp);
+        multMatricesLineByLine(m_block, n_block, k_block, A_local, B_local, C_tmp);
 
         sumMatrix(m_block, n_block, C_local, C_tmp, C_local);
     }
@@ -364,7 +364,7 @@ int compute(){
 
     if (rank == 0) {
 
-        multiplyMatrixNaive(m, n, k, A, B, C_naive);
+        multMatricesLineByLine(m, n, k, A, B, C_naive);
 
         double eps = validate(n, k, C, C_naive);
         if (eps > 1e-4) {
@@ -441,7 +441,7 @@ if(rank == local){
     printMatrix(m_block,m_block, B_local);
 }
 
-multiplyMatrixNaive(m_block, n_block, k_block, A_local, B_local, C_tmp);
+multMatricesLineByLine(m_block, n_block, k_block, A_local, B_local, C_tmp);
 sumMatrix(m_block, n_block, C_local, C_tmp, C_local);
 
 if(rank == local){
